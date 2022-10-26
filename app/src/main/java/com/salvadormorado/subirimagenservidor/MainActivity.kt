@@ -2,11 +2,14 @@ package com.salvadormorado.subirimagenservidor
 
 import android.app.ProgressDialog
 import android.content.Intent
+import android.content.res.Resources
+import android.database.Cursor
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.AsyncTask
 import android.os.Bundle
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.util.Base64
 import android.util.Log
 import android.widget.Button
@@ -21,14 +24,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 class MainActivity : AppCompatActivity() {
-    private lateinit var imageView_Upload:ImageView
-    private lateinit var button_SelectImage:Button
-    private lateinit var button_UploadImage:Button
+    private lateinit var imageView_Upload: ImageView
+    private lateinit var button_SelectImage: Button
+    private lateinit var button_UploadImage: Button
     private var progressBar: ProgressDialog? = null
     private var progressAsyncTask: ProgressAsyncTask? = null
     private val hosting = "https://webserviceexamplesmq.000webhostapp.com/Services/"
-    private lateinit var outputImage:Uri
-    private lateinit var bitmap:Bitmap
+    private var outputImage: Uri? = null
+    private var bitmap: Bitmap? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,17 +51,29 @@ class MainActivity : AppCompatActivity() {
         })
 
         button_UploadImage.setOnClickListener({
-            if(outputImage!=null){
-                val fileImage:File = File(outputImage.path)
-                val foto: String? = getStringImagen(bitmap)
+            if (outputImage != null) {
+                bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), outputImage)
+
+                val foto: String? = getStringImagen(bitmap!!)
+                val name:String = getNameImage(outputImage!!)
 
                 val json = JSONObject()
                 json.put("foto", foto)
-                json.put("nombre", "hola")
+                json.put("nombre", "${name}")
+
                 progressAsyncTask = ProgressAsyncTask()
                 progressAsyncTask!!.execute("POST", hosting + "uploadImage.php", json.toString())
+            }else{
+                Toast.makeText(applicationContext,"Debes seleccionar una imagen primero.", Toast.LENGTH_SHORT).show()
             }
         })
+    }
+
+    fun getNameImage(outputImage:Uri):String{
+        val cursor: Cursor? = contentResolver.query(outputImage!!, null, null, null, null)
+        val nameIndex = cursor!!.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        cursor.moveToFirst()
+        return cursor.getString(nameIndex)
     }
 
     fun getStringImagen(bmp: Bitmap): String? {
@@ -73,10 +88,7 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == 111 && resultCode == RESULT_OK) {
             outputImage = data?.data!!
             Log.e("Imagen :", "$outputImage")
-
             imageView_Upload.setImageURI(outputImage)
-
-            bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), outputImage);
         }
     }
 
@@ -136,57 +148,42 @@ class MainActivity : AppCompatActivity() {
         fun readStream(inputStream: BufferedInputStream): String {
             val bufferedReader = BufferedReader(InputStreamReader(inputStream))
             val stringBuilder = StringBuilder()
-
             bufferedReader.forEachLine { stringBuilder.append(it) }
-            Log.e("StringBuider", "${stringBuilder.toString()}")
-
+            Log.e("stringBuilder", "${stringBuilder.toString()}")
             return stringBuilder.toString()
         }
 
         //Cuando llegan los datos del servidor
         override fun onProgressUpdate(vararg values: Unit?) {
             super.onProgressUpdate(*values)
-
         }
 
-        //Despues de la ejecuión
+        //Despues de la ejecución
         override fun onPostExecute(result: String?) {
             super.onPostExecute(result)
             Log.e("Resultado:", "$result")
 
-            if (!result.isNullOrBlank() && !result.isNullOrEmpty() ) {
+            if (!result.equals("null")) {
                 val parser: Parser = Parser()
                 val stringBuilder: StringBuilder = StringBuilder(result)
                 val json: JsonObject = parser.parse(stringBuilder) as JsonObject
-
                 if (json.int("succes") == 1) {
-                    Toast.makeText(applicationContext, "Se subio la imagen", Toast.LENGTH_SHORT).show()
-                    /*val jsonFinal = JSONObject(result)
-                    val dataUser = jsonFinal.getJSONArray("datosUsuario")
-                    val idUser = dataUser.getJSONObject(0).getInt("idUsuario")
-                    val nameUser = dataUser.getJSONObject(0).getString("nombreUsuario")
-                    Log.e("Name user", "$nameUser")
-                    Log.e("ID user", "$idUser")*/
-
-
+                    progressBar!!.dismiss()
+                    Toast.makeText(applicationContext, "Se subio con exito la imagen al servidor.", Toast.LENGTH_SHORT).show()
+                    imageView_Upload.setImageResource(R.drawable.upload)
+                    outputImage = null
                 } else {
-                    Toast.makeText(applicationContext, "Usuarion invalido.", Toast.LENGTH_SHORT)
-                        .show()
+                    Toast.makeText(applicationContext, "Error al subir la imagen al servidor, intenta de nuevo.", Toast.LENGTH_SHORT).show()
                 }
-            } else if (result.isNullOrBlank() && result.isNullOrEmpty()) {
-                Toast.makeText(
-                    applicationContext,
-                    "No se recibio nada desde el servidor.",
-                    Toast.LENGTH_SHORT
-                ).show()
+            } else {
+                Toast.makeText(applicationContext,"No se recibio nada desde el servidor.", Toast.LENGTH_SHORT).show()
             }
         }
 
         override fun onCancelled() {
             super.onCancelled()
             progressBar!!.dismiss()
+            Toast.makeText(applicationContext, "Se cancelo la subida de la imagen al servidor.", Toast.LENGTH_SHORT).show()
         }
     }
-
-
 }
