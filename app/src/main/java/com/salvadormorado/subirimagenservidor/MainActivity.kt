@@ -18,6 +18,12 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.beust.klaxon.JsonObject
 import com.beust.klaxon.Parser
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.*
 import java.net.HttpURLConnection
@@ -61,8 +67,10 @@ class MainActivity : AppCompatActivity() {
                 json.put("foto", foto)
                 json.put("nombre", "${name}")
 
-                progressAsyncTask = ProgressAsyncTask()
-                progressAsyncTask!!.execute("POST", hosting + "uploadImage.php", json.toString())
+                //progressAsyncTask = ProgressAsyncTask()
+                //progressAsyncTask!!.execute("POST", hosting + "uploadImage.php", json.toString())
+                uploadImageWithCoroutines(json.toString())
+
             }else{
                 Toast.makeText(applicationContext,"Debes seleccionar una imagen primero.", Toast.LENGTH_SHORT).show()
             }
@@ -184,6 +192,50 @@ class MainActivity : AppCompatActivity() {
             super.onCancelled()
             progressBar!!.dismiss()
             Toast.makeText(applicationContext, "Se cancelo la subida de la imagen al servidor.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun uploadImageWithCoroutines(jsonString:String) {
+
+        progressBar!!.show()
+
+        GlobalScope.launch {
+            Dispatchers.IO
+            val url = URL("https://webserviceexamplesmq.000webhostapp.com/Services/uploadImage.php")
+
+            val httpURLConnection = url.openConnection() as HttpURLConnection
+            httpURLConnection.requestMethod = "POST"
+            httpURLConnection.setRequestProperty("Content-Type", "application/json")
+            httpURLConnection.setRequestProperty("Accept", "application/json")
+            httpURLConnection.doInput = true
+            httpURLConnection.doOutput = true
+
+            val outputStreamWritter = OutputStreamWriter(httpURLConnection.outputStream)
+            outputStreamWritter.write(jsonString)
+            outputStreamWritter.flush()
+
+            val responseCode = httpURLConnection.responseCode
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                val response = httpURLConnection.inputStream.bufferedReader().use { it.readLine() }
+                withContext(Dispatchers.Main) {
+                    val gson = GsonBuilder().setPrettyPrinting().create()
+                    val gsonAux = gson.toJson(JsonParser.parseString(response))
+                    Log.e("gsonAux", gsonAux)
+
+                    if (gsonAux.contains("1")) {
+                        progressBar!!.dismiss()
+                        Toast.makeText(applicationContext, "Se subio con exito la imagen al servidor.", Toast.LENGTH_SHORT).show()
+                        imageView_Upload.setImageResource(R.drawable.upload)
+                        outputImage = null
+                        progressBar!!.dismiss()
+                    } else {
+                        Toast.makeText(applicationContext, "Error al subir la imagen al servidor, intenta de nuevo.", Toast.LENGTH_SHORT).show()
+                    }
+
+                }
+            }else{
+                Log.e("HTTP ERROR DE CONEXIÓN", "")
+            }
         }
     }
 }
