@@ -2,11 +2,9 @@ package com.salvadormorado.subirimagenservidor
 
 import android.app.ProgressDialog
 import android.content.Intent
-import android.content.res.Resources
 import android.database.Cursor
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.AsyncTask
 import android.os.Bundle
 import android.provider.MediaStore
 import android.provider.OpenableColumns
@@ -16,8 +14,6 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.beust.klaxon.JsonObject
-import com.beust.klaxon.Parser
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
@@ -34,8 +30,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var button_SelectImage: Button
     private lateinit var button_UploadImage: Button
     private var progressBar: ProgressDialog? = null
-    private var progressAsyncTask: ProgressAsyncTask? = null
-    private val hosting = "https://webserviceexamplesmq.000webhostapp.com/Services/"
     private var outputImage: Uri? = null
     private var bitmap: Bitmap? = null
 
@@ -50,13 +44,13 @@ class MainActivity : AppCompatActivity() {
         progressBar = ProgressDialog(this@MainActivity)
         progressBar!!.setMessage("Subiendo imagen, por favor espere...")
 
-        button_SelectImage.setOnClickListener({
+        button_SelectImage.setOnClickListener{
             val selectVideo: Intent =
                 Intent().setType("image/*").setAction(Intent.ACTION_GET_CONTENT)
             startActivityForResult(Intent.createChooser(selectVideo, "Seleccionar imagen..."), 111)
-        })
+        }
 
-        button_UploadImage.setOnClickListener({
+        button_UploadImage.setOnClickListener{
             if (outputImage != null) {
                 bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), outputImage)
 
@@ -67,14 +61,12 @@ class MainActivity : AppCompatActivity() {
                 json.put("foto", foto)
                 json.put("nombre", "${name}")
 
-                //progressAsyncTask = ProgressAsyncTask()
-                //progressAsyncTask!!.execute("POST", hosting + "uploadImage.php", json.toString())
                 uploadImageWithCoroutines(json.toString())
 
             }else{
                 Toast.makeText(applicationContext,"Debes seleccionar una imagen primero.", Toast.LENGTH_SHORT).show()
             }
-        })
+        }
     }
 
     fun getNameImage(outputImage:Uri):String{
@@ -97,101 +89,6 @@ class MainActivity : AppCompatActivity() {
             outputImage = data?.data!!
             Log.e("Imagen :", "$outputImage")
             imageView_Upload.setImageURI(outputImage)
-        }
-    }
-
-    inner class ProgressAsyncTask : AsyncTask<String, Unit, String>() {
-        val TIME_OUT = 50000
-
-        //Antes de ejecutar
-        override fun onPreExecute() {
-            super.onPreExecute()
-            progressBar!!.show()
-        }
-
-        //En ejecución en segundo plano
-        override fun doInBackground(vararg params: String?): String {
-            val url = URL(params[1])
-            val httpClient = url.openConnection() as HttpURLConnection
-            httpClient.readTimeout = TIME_OUT
-            httpClient.connectTimeout = TIME_OUT
-            httpClient.requestMethod = params[0]
-
-            if (params[0] == "POST") {
-                httpClient.instanceFollowRedirects = false
-                httpClient.doOutput = true
-                httpClient.doInput = true
-                httpClient.useCaches = false
-                httpClient.setRequestProperty("Content-Type", "application/json; charset-utf-8")
-            }
-
-            try {
-                if (params[0] == "POST") {
-                    httpClient.connect()
-                    val os = httpClient.outputStream
-                    val writer = BufferedWriter(OutputStreamWriter(os, "UTF-8"))
-                    writer.write(params[2])
-                    writer.flush()
-                    writer.close()
-                    os.close()
-                }
-                if (httpClient.responseCode == HttpURLConnection.HTTP_OK) {
-                    val stream = BufferedInputStream(httpClient.inputStream)
-                    val data: String = readStream(inputStream = stream)
-                    Log.e("Data:", data)
-                    return data
-                } else if (httpClient.responseCode == HttpURLConnection.HTTP_CLIENT_TIMEOUT) {
-                    Log.e("ERROR:", httpClient.responseCode.toString())
-                } else {
-                    Log.e("ERROR:", httpClient.responseCode.toString())
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                httpClient.disconnect()
-            }
-            return null.toString()
-        }
-
-        fun readStream(inputStream: BufferedInputStream): String {
-            val bufferedReader = BufferedReader(InputStreamReader(inputStream))
-            val stringBuilder = StringBuilder()
-            bufferedReader.forEachLine { stringBuilder.append(it) }
-            Log.e("stringBuilder", "${stringBuilder.toString()}")
-            return stringBuilder.toString()
-        }
-
-        //Cuando llegan los datos del servidor
-        override fun onProgressUpdate(vararg values: Unit?) {
-            super.onProgressUpdate(*values)
-        }
-
-        //Despues de la ejecución
-        override fun onPostExecute(result: String?) {
-            super.onPostExecute(result)
-            Log.e("Resultado:", "$result")
-
-            if (!result.equals("null")) {
-                val parser: Parser = Parser()
-                val stringBuilder: StringBuilder = StringBuilder(result)
-                val json: JsonObject = parser.parse(stringBuilder) as JsonObject
-                if (json.int("succes") == 1) {
-                    progressBar!!.dismiss()
-                    Toast.makeText(applicationContext, "Se subio con exito la imagen al servidor.", Toast.LENGTH_SHORT).show()
-                    imageView_Upload.setImageResource(R.drawable.upload)
-                    outputImage = null
-                } else {
-                    Toast.makeText(applicationContext, "Error al subir la imagen al servidor, intenta de nuevo.", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                Toast.makeText(applicationContext,"No se recibio nada desde el servidor.", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        override fun onCancelled() {
-            super.onCancelled()
-            progressBar!!.dismiss()
-            Toast.makeText(applicationContext, "Se cancelo la subida de la imagen al servidor.", Toast.LENGTH_SHORT).show()
         }
     }
 
